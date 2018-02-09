@@ -1,0 +1,11 @@
+<component name="libraryTable">
+  <library name="Gradle: org.openbaton:common:5.1.4-SNAPSHOT">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.openbaton/common/5.1.4-SNAPSHOT/af1124b4faa96a8da8f20445c596484c69a1d3bf/common-5.1.4-SNAPSHOT.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.openbaton/common/5.1.4-SNAPSHOT/731a006e819b02eb72ec4372187e08aec10d5a3f/common-5.1.4-SNAPSHOT-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
