@@ -1,10 +1,18 @@
 package org.openbaton.drivers;
 
+import io.kubernetes.client.ApiClient;
+import io.kubernetes.client.ApiException;
+import io.kubernetes.client.Configuration;
+import io.kubernetes.client.apis.CoreV1Api;
+import io.kubernetes.client.models.*;
+import io.kubernetes.client.util.Config;
+import org.joda.time.DateTime;
 import org.openbaton.catalogue.mano.common.DeploymentFlavour;
 import org.openbaton.catalogue.mano.descriptor.VNFDConnectionPoint;
 import org.openbaton.catalogue.nfvo.Quota;
 import org.openbaton.catalogue.nfvo.Server;
 import org.openbaton.catalogue.nfvo.images.BaseNfvImage;
+import org.openbaton.catalogue.nfvo.images.NFVImage;
 import org.openbaton.catalogue.nfvo.networks.BaseNetwork;
 import org.openbaton.catalogue.nfvo.networks.Subnet;
 import org.openbaton.catalogue.nfvo.viminstances.BaseVimInstance;
@@ -17,9 +25,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.util.List;
+import java.util.*;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
 public class KubernetesVIM extends VimDriver {
@@ -28,7 +35,28 @@ public class KubernetesVIM extends VimDriver {
 
     @Override
     public Server launchInstance(BaseVimInstance vimInstance, String name, String image, String flavor, String keypair, Set<VNFDConnectionPoint> networks, Set<String> secGroup, String userData) throws VimDriverException {
-        return null;
+
+        Server server = new Server();
+
+        try {
+            ApiClient client = Config.defaultClient(); //Creating Kubernetes client
+            Configuration.setDefaultApiClient(client); //Setting Kubernetes client as Default one. Necessary for the CoreV1Api
+
+            CoreV1Api api = new CoreV1Api(); //Creating obj for requesting information via API
+
+            server.setName("k8-server"); //ToDo: Find a better way to populate the Server Name.
+            server.setCreated(new Date());
+            server.setExtId(vimInstance.getId());
+            server.setInstanceName(vimInstance.getName());
+            server.setExtendedStatus(vimInstance.isActive() ? "Active" : "Inactive");
+            server.setIps(null);
+            server.setFloatingIps(null);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return server;
     }
 
     @Override
@@ -48,7 +76,55 @@ public class KubernetesVIM extends VimDriver {
 
     @Override
     public List<BaseNfvImage> listImages(BaseVimInstance vimInstance) throws VimDriverException {
-        return null;
+
+        List<BaseNfvImage> images = new ArrayList<>();
+
+        try {
+            ApiClient client = Config.defaultClient(); //Creating Kubernetes client
+            Configuration.setDefaultApiClient(client); //Setting Kubernetes client as Default one. Necessary for the CoreV1Api
+
+            CoreV1Api api = new CoreV1Api(); //Creating obj for requesting information via API
+
+            V1PodList ls_pods = null;
+            try {
+                ls_pods = api.listPodForAllNamespaces(null, null, null, null, null, null, null, null, null);
+//                ls_pods = api.listNamespacedPod("default", null, null, null, null, null, null, null, null);
+
+                for (V1Pod item : ls_pods.getItems()) {
+
+                    NFVImage img = new NFVImage();
+                    for (V1ContainerStatus stat : item.getStatus().getContainerStatuses()) {
+
+                        img.setName(stat.getImage());
+                        if (stat.getState().getRunning() != null ) {
+                            img.setStatus("ACTIVE");
+                        } else  {
+                            img.setStatus("UNRECOGNIZED");
+                        }
+                        img.setProjectId(vimInstance.getProjectId());
+                        images.add(img);
+                    }
+                }
+            } catch (ApiException e) {
+                e.printStackTrace();
+            }
+
+
+
+        } catch (IOException e) { // Exception e
+            e.printStackTrace();
+            logger.error(e.getMessage(), e);
+
+
+            Throwable[] suppressed = e.getSuppressed();
+            if (suppressed != null) {
+                for (Throwable t : suppressed) {NFVImage
+                    logger.error(t.getMessage(), t);
+                }
+            }
+        }
+
+        return images;
     }
 
     @Override
@@ -58,7 +134,9 @@ public class KubernetesVIM extends VimDriver {
 
     @Override
     public BaseVimInstance refresh(BaseVimInstance vimInstance) throws VimDriverException {
-        return null;
+        System.out.println("Refreshing VIM");
+        log("vimInstance",vimInstance.toString());
+        return vimInstance;
     }
 
     @Override
@@ -166,7 +244,7 @@ public class KubernetesVIM extends VimDriver {
         return null;
     }
 
-    public static void main(String[] args) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException, IOException, TimeoutException, InterruptedException {
+    public static void main(String[] args) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException, IOException, TimeoutException, InterruptedException, ApiException {
         String namespace = null;
         String master = "https://192.168.39.206:8443";
 
@@ -194,6 +272,98 @@ public class KubernetesVIM extends VimDriver {
         } else {
             PluginStarter.registerPlugin(KubernetesVIM.class, "kubernetes", "127.0.0.1", 5672, 10);
         }
+
+
+
+
+        try {
+            ApiClient client = Config.defaultClient(); //Creating Kubernetes client
+            Configuration.setDefaultApiClient(client); //Setting Kubernetes client as Default one. Necessary for the CoreV1Api
+
+            CoreV1Api api = new CoreV1Api(); //Creating obj for requesting information via API
+//            List<V1Pod> ls_pods = new ArrayList<>();
+            List<NFVImage> images = new ArrayList<>();
+            V1PodList ls_pods = null;
+            try {
+                ls_pods = api.listPodForAllNamespaces(null, null, null, null, null, null, null, null, null);
+                List<V1Container> ls_con = new ArrayList<>();
+                for (V1Pod item : ls_pods.getItems()) {
+//                    System.out.println(item.getSpec().getContainers());
+//                    log("Pod", item);
+                    NFVImage img = new NFVImage();
+                    for (V1ContainerStatus stat : item.getStatus().getContainerStatuses()) {
+//                        log("container", con);
+
+                        img.setName(stat.getImage());
+                        if (stat.getState().getRunning() != null ) {
+                            img.setStatus("ACTIVE");
+                        } else  {
+                            img.setStatus("UNRECOGNIZED");
+                        }
+                        log("Status*******:", stat.getContainerID());
+                        log("Status*******:", stat.getImage());
+                        log("Status*******:", stat.getImageID());
+                        log("Status*******:", stat.getName());
+                        log("Status*******:", stat.getState().getRunning());
+                        log("Status*******:", stat.getState().getTerminated());
+                        log("Status*******:", stat.getState().getWaiting());
+                        log("Status*******:", item.getMetadata());
+                        images.add(img);
+//                        ls_con.add(con);
+                    }
+                    log("**********:","***************");
+                    for (V1Container con : item.getSpec().getContainers()) {
+//                        log("container", con);
+                        log("image*******:", con.getImage());
+                        ls_con.add(con);
+                    }
+//                    for (V1Container con : ls_con) {
+//                        log("name", con.getName());
+//                        log("image:", con.getImage());
+//                    }
+                }
+                for (NFVImage a : images) {
+                    log("IMAGES", a);
+                }
+                log("LIST IMAGES", images);
+            } catch (ApiException e) {
+                e.printStackTrace();
+            }
+
+            //Creating NamespacedPod
+//            String str_ns = "default"; // String | object name and auth scope, such as for teams and projects
+//            String pretty = "pretty_example"; // String | If 'true', then the output is pretty printed.
+//            V1Pod pod = new V1Pod();
+//            pod.setApiVersion("v1");
+//            pod.setKind("Pod");
+//            V1ObjectMeta metadata = new V1ObjectMeta();
+//            pod.setMetadata(metadata.name("test1").clusterName("minikube"));
+//            V1Container container = new V1Container().image("nginx").name("nginx");
+//            List<V1Container> list_ct = new ArrayList<>();
+//            list_ct.add(container);
+//            pod.setSpec(new V1PodSpec().containers(list_ct));
+//            try {
+//                V1Pod result2 = api.createNamespacedPod(str_ns, pod, pretty);
+////                System.out.println(result2);
+//            } catch (ApiException e) {
+//                System.err.println("Exception when calling CoreV1Api#createNamespacedPod");
+//                e.printStackTrace();
+//            }
+//
+
+        } catch (IOException e) { // Exception e
+            e.printStackTrace();
+            logger.error(e.getMessage(), e);
+
+
+            Throwable[] suppressed = e.getSuppressed();
+            if (suppressed != null) {
+                for (Throwable t : suppressed) {
+                    logger.error(t.getMessage(), t);
+                }
+            }
+        }
+
     }
 
 
