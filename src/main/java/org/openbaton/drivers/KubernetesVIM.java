@@ -118,7 +118,7 @@ public class KubernetesVIM extends VimDriver {
 
             Throwable[] suppressed = e.getSuppressed();
             if (suppressed != null) {
-                for (Throwable t : suppressed) {NFVImage
+                for (Throwable t : suppressed) {
                     logger.error(t.getMessage(), t);
                 }
             }
