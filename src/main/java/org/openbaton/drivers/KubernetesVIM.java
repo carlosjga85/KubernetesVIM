@@ -1,5 +1,8 @@
 package org.openbaton.drivers;
 
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.model.SearchItem;
+import com.github.dockerjava.core.DockerClientBuilder;
 import io.kubernetes.client.ApiClient;
 import io.kubernetes.client.ApiException;
 import io.kubernetes.client.Configuration;
@@ -36,6 +39,8 @@ public class KubernetesVIM extends VimDriver {
     @Override
     public Server launchInstance(BaseVimInstance vimInstance, String name, String image, String flavor, String keypair, Set<VNFDConnectionPoint> networks, Set<String> secGroup, String userData) throws VimDriverException {
 
+        System.out.println(userData);
+        log("Launching instance", name);
         Server server = new Server();
 
         try {
@@ -83,34 +88,13 @@ public class KubernetesVIM extends VimDriver {
             ApiClient client = Config.defaultClient(); //Creating Kubernetes client
             Configuration.setDefaultApiClient(client); //Setting Kubernetes client as Default one. Necessary for the CoreV1Api
 
-            CoreV1Api api = new CoreV1Api(); //Creating obj for requesting information via API
+            DockerClient dockerClient = DockerClientBuilder.getInstance().build(); // Creating Docker Client for listing Images available
 
-            V1PodList ls_pods = null;
-            try {
-                ls_pods = api.listPodForAllNamespaces(null, null, null, null, null, null, null, null, null);
-//                ls_pods = api.listNamespacedPod("default", null, null, null, null, null, null, null, null);
+            List<SearchItem> items = dockerClient.searchImagesCmd("Java").exec();
 
-                for (V1Pod item : ls_pods.getItems()) {
-
-                    NFVImage img = new NFVImage();
-                    for (V1ContainerStatus stat : item.getStatus().getContainerStatuses()) {
-
-                        img.setName(stat.getImage());
-                        if (stat.getState().getRunning() != null ) {
-                            img.setStatus("ACTIVE");
-                        } else  {
-                            img.setStatus("UNRECOGNIZED");
-                        }
-                        img.setProjectId(vimInstance.getProjectId());
-                        images.add(img);
-                    }
-                }
-            } catch (ApiException e) {
-                e.printStackTrace();
+            for(int i=0; i < items.size(); i++){
+                System.out.println(items.get(i).getName());
             }
-
-
-
         } catch (IOException e) { // Exception e
             e.printStackTrace();
             logger.error(e.getMessage(), e);
@@ -127,6 +111,19 @@ public class KubernetesVIM extends VimDriver {
         return images;
     }
 
+    public List<BaseNfvImage> listImages(BaseVimInstance vimInstance, String image_name) throws VimDriverException {
+
+        DockerClient dockerClient = DockerClientBuilder.getInstance().build(); // Creating Docker Client for listing Images available
+
+        List<SearchItem> items = dockerClient.searchImagesCmd("Java").exec();
+
+        for(int i=0; i < items.size(); i++){
+            System.out.println(items.get(i).getName());
+        }
+
+        return new ArrayList<>();
+    }
+
     @Override
     public List<DeploymentFlavour> listFlavors(BaseVimInstance vimInstance) throws VimDriverException {
         return null;
@@ -136,6 +133,16 @@ public class KubernetesVIM extends VimDriver {
     public BaseVimInstance refresh(BaseVimInstance vimInstance) throws VimDriverException {
         System.out.println("Refreshing VIM");
         log("vimInstance",vimInstance.toString());
+
+//        KubernetesVimInstance kubernetes = (KubernetesVimInstance) vimInstance;
+//        List<BaseNfvImage> newImages = listImages(vimInstance);
+//
+//        if (kubernetes.getImages() == null) {
+//            kubernetes.setImages(new HashSet<>());
+//        }
+//        kubernetes.removeAllImages();
+//        kubernetes.addAllImages(newImages);
+//        return (BaseVimInstance) kubernetes;
         return vimInstance;
     }
 
@@ -284,51 +291,61 @@ public class KubernetesVIM extends VimDriver {
 //            List<V1Pod> ls_pods = new ArrayList<>();
             List<NFVImage> images = new ArrayList<>();
             V1PodList ls_pods = null;
-            try {
-                ls_pods = api.listPodForAllNamespaces(null, null, null, null, null, null, null, null, null);
-                List<V1Container> ls_con = new ArrayList<>();
-                for (V1Pod item : ls_pods.getItems()) {
-//                    System.out.println(item.getSpec().getContainers());
-//                    log("Pod", item);
-                    NFVImage img = new NFVImage();
-                    for (V1ContainerStatus stat : item.getStatus().getContainerStatuses()) {
-//                        log("container", con);
 
-                        img.setName(stat.getImage());
-                        if (stat.getState().getRunning() != null ) {
-                            img.setStatus("ACTIVE");
-                        } else  {
-                            img.setStatus("UNRECOGNIZED");
-                        }
-                        log("Status*******:", stat.getContainerID());
-                        log("Status*******:", stat.getImage());
-                        log("Status*******:", stat.getImageID());
-                        log("Status*******:", stat.getName());
-                        log("Status*******:", stat.getState().getRunning());
-                        log("Status*******:", stat.getState().getTerminated());
-                        log("Status*******:", stat.getState().getWaiting());
-                        log("Status*******:", item.getMetadata());
-                        images.add(img);
-//                        ls_con.add(con);
-                    }
-                    log("**********:","***************");
-                    for (V1Container con : item.getSpec().getContainers()) {
-//                        log("container", con);
-                        log("image*******:", con.getImage());
-                        ls_con.add(con);
-                    }
-//                    for (V1Container con : ls_con) {
-//                        log("name", con.getName());
-//                        log("image:", con.getImage());
-//                    }
-                }
-                for (NFVImage a : images) {
-                    log("IMAGES", a);
-                }
-                log("LIST IMAGES", images);
-            } catch (ApiException e) {
-                e.printStackTrace();
+            DockerClient dockerClient = DockerClientBuilder.getInstance().build();
+
+            List<SearchItem> items = dockerClient.searchImagesCmd("").exec();
+
+            for(int i=0; i < items.size(); i++){
+                System.out.println(items.get(i).getName());
             }
+
+
+//            try {
+//                ls_pods = api.listPodForAllNamespaces(null, null, null, null, null, null, null, null, null);
+//                List<V1Container> ls_con = new ArrayList<>();
+//                for (V1Pod item : ls_pods.getItems()) {
+////                    System.out.println(item.getSpec().getContainers());
+////                    log("Pod", item);
+//                    NFVImage img = new NFVImage();
+//                    for (V1ContainerStatus stat : item.getStatus().getContainerStatuses()) {
+////                        log("container", con);
+//
+//                        img.setName(stat.getImage());
+//                        if (stat.getState().getRunning() != null ) {
+//                            img.setStatus("ACTIVE");
+//                        } else  {
+//                            img.setStatus("UNRECOGNIZED");
+//                        }
+//                        log("Status*******:", stat.getContainerID());
+//                        log("Status*******:", stat.getImage());
+//                        log("Status*******:", stat.getImageID());
+//                        log("Status*******:", stat.getName());
+//                        log("Status*******:", stat.getState().getRunning());
+//                        log("Status*******:", stat.getState().getTerminated());
+//                        log("Status*******:", stat.getState().getWaiting());
+//                        log("Status*******:", item.getMetadata());
+//                        images.add(img);
+////                        ls_con.add(con);
+//                    }
+//                    log("**********:","***************");
+//                    for (V1Container con : item.getSpec().getContainers()) {
+////                        log("container", con);
+//                        log("image*******:", con.getImage());
+//                        ls_con.add(con);
+//                    }
+////                    for (V1Container con : ls_con) {
+////                        log("name", con.getName());
+////                        log("image:", con.getImage());
+////                    }
+//                }
+//                for (NFVImage a : images) {
+//                    log("IMAGES", a);
+//                }
+//                log("LIST IMAGES", images);
+//            } catch (ApiException e) {
+//                e.printStackTrace();
+//            }
 
             //Creating NamespacedPod
 //            String str_ns = "default"; // String | object name and auth scope, such as for teams and projects
