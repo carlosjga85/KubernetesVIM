@@ -1,6 +1,7 @@
 package org.openbaton.drivers;
 
 import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.model.Image;
 import com.github.dockerjava.api.model.SearchItem;
 import com.github.dockerjava.core.DockerClientBuilder;
 import io.kubernetes.client.ApiClient;
@@ -12,13 +13,16 @@ import io.kubernetes.client.util.Config;
 import org.joda.time.DateTime;
 import org.openbaton.catalogue.mano.common.DeploymentFlavour;
 import org.openbaton.catalogue.mano.descriptor.VNFDConnectionPoint;
+import org.openbaton.catalogue.nfvo.Location;
 import org.openbaton.catalogue.nfvo.Quota;
 import org.openbaton.catalogue.nfvo.Server;
 import org.openbaton.catalogue.nfvo.images.BaseNfvImage;
+import org.openbaton.catalogue.nfvo.images.DockerImage;
 import org.openbaton.catalogue.nfvo.images.NFVImage;
 import org.openbaton.catalogue.nfvo.networks.BaseNetwork;
 import org.openbaton.catalogue.nfvo.networks.Subnet;
 import org.openbaton.catalogue.nfvo.viminstances.BaseVimInstance;
+import org.openbaton.catalogue.nfvo.viminstances.DockerVimInstance;
 import org.openbaton.catalogue.security.Key;
 import org.openbaton.exceptions.VimDriverException;
 import org.openbaton.plugin.PluginStarter;
@@ -83,6 +87,7 @@ public class KubernetesVIM extends VimDriver {
     public List<BaseNfvImage> listImages(BaseVimInstance vimInstance) throws VimDriverException {
 
         List<BaseNfvImage> images = new ArrayList<>();
+        DockerImage img = new DockerImage();
 
         try {
             ApiClient client = Config.defaultClient(); //Creating Kubernetes client
@@ -92,9 +97,20 @@ public class KubernetesVIM extends VimDriver {
 
             List<SearchItem> items = dockerClient.searchImagesCmd("Java").exec();
 
+            Set<String> str = new HashSet<String>();
+//            Image image;
+
             for(int i=0; i < items.size(); i++){
                 System.out.println(items.get(i).getName());
+                img.setCreated(new Date());
+                img.setExtId(UUID.randomUUID().toString());
+                str.add(items.get(i).getName());
+                img.setTags(str);
+                log("IMG", img);
+                images.add(img); // Todo: (Fix it) Here there's a problem since images is List<BaseNfvImage> and it does not handle "tag".
+                str.remove(items.get(i).getName());
             }
+            log("FOR", images);
         } catch (IOException e) { // Exception e
             e.printStackTrace();
             logger.error(e.getMessage(), e);
@@ -113,13 +129,13 @@ public class KubernetesVIM extends VimDriver {
 
     public List<BaseNfvImage> listImages(BaseVimInstance vimInstance, String image_name) throws VimDriverException {
 
-        DockerClient dockerClient = DockerClientBuilder.getInstance().build(); // Creating Docker Client for listing Images available
-
-        List<SearchItem> items = dockerClient.searchImagesCmd("Java").exec();
-
-        for(int i=0; i < items.size(); i++){
-            System.out.println(items.get(i).getName());
-        }
+//        DockerClient dockerClient = DockerClientBuilder.getInstance().build(); // Creating Docker Client for listing Images available
+//
+//        List<SearchItem> items = dockerClient.searchImagesCmd("Java").exec();
+//
+//        for(int i=0; i < items.size(); i++){
+//            System.out.println(items.get(i).getName());
+//        }
 
         return new ArrayList<>();
     }
@@ -134,16 +150,38 @@ public class KubernetesVIM extends VimDriver {
         System.out.println("Refreshing VIM");
         log("vimInstance",vimInstance.toString());
 
-//        KubernetesVimInstance kubernetes = (KubernetesVimInstance) vimInstance;
-//        List<BaseNfvImage> newImages = listImages(vimInstance);
+        try {
+            DockerVimInstance kubernetes = (DockerVimInstance) vimInstance;
+            List<BaseNfvImage> newImages = listImages(vimInstance);
+            if (kubernetes.getImages() == null) {
+                kubernetes.setImages(new HashSet<>());
+                log("Showing Images (Null)", kubernetes.getImages());
+            }
+//            kubernetes.removeAllImages();
+            kubernetes.addAllImages(newImages);
+            log("Showing Images (Not Null)", kubernetes.getImages());
+            return (BaseVimInstance) kubernetes;
+
+        } catch (VimDriverException e) {
+            e.printStackTrace();
+            logger.error(e.getMessage(), e);
+        }
+
+
+//        BaseVimInstance vimInstance1 =
+//        vimInstance1.setName("kub-vim-instance");
+//        vimInstance1.setActive(true);
+//        vimInstance1.setAuthUrl("https://192.168.39.206:8443");
+//        vimInstance1.setType("kubernetes");
+//        Location location = new Location();
+//        location.setName("Berlin");
+//        location.setLatitude("52.525876");
+//        location.setLatitude("13.314400");
+//        vimInstance1.setLocation(location);
 //
-//        if (kubernetes.getImages() == null) {
-//            kubernetes.setImages(new HashSet<>());
-//        }
-//        kubernetes.removeAllImages();
-//        kubernetes.addAllImages(newImages);
-//        return (BaseVimInstance) kubernetes;
+
         return vimInstance;
+
     }
 
     @Override
@@ -253,7 +291,7 @@ public class KubernetesVIM extends VimDriver {
 
     public static void main(String[] args) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException, IOException, TimeoutException, InterruptedException, ApiException {
         String namespace = null;
-        String master = "https://192.168.39.206:8443";
+        String master = "https://192.168.39.60:8443";
 
         BaseVimInstance vimInstance = null;
         String vim_name = "k8-vim-instance";
@@ -283,13 +321,19 @@ public class KubernetesVIM extends VimDriver {
 
 
 
+
         try {
             ApiClient client = Config.defaultClient(); //Creating Kubernetes client
             Configuration.setDefaultApiClient(client); //Setting Kubernetes client as Default one. Necessary for the CoreV1Api
 
             CoreV1Api api = new CoreV1Api(); //Creating obj for requesting information via API
 //            List<V1Pod> ls_pods = new ArrayList<>();
-            List<NFVImage> images = new ArrayList<>();
+//            List<NFVImage> images = new ArrayList<>();
+
+
+//            KubernetesVimInstance kubernetes = (KubernetesVimInstance) vimInstance;
+//            List<BaseNfvImage> newImages = listImages(vimInstance);
+
             V1PodList ls_pods = null;
 
             DockerClient dockerClient = DockerClientBuilder.getInstance().build();
