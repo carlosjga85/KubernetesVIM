@@ -95,22 +95,28 @@ public class KubernetesVIM extends VimDriver {
 
             DockerClient dockerClient = DockerClientBuilder.getInstance().build(); // Creating Docker Client for listing Images available
 
-            List<SearchItem> items = dockerClient.searchImagesCmd("Java").exec();
+            List<Image> items = dockerClient.listImagesCmd().exec();
 
-            Set<String> str = new HashSet<String>();
+//            Set<String> str = new HashSet<String>();
 //            Image image;
 
-            for(int i=0; i < items.size(); i++){
-                System.out.println(items.get(i).getName());
-                img.setCreated(new Date());
-                img.setExtId(UUID.randomUUID().toString());
-                str.add(items.get(i).getName());
-                img.setTags(str);
-                log("IMG", img);
-                images.add(img); // Todo: (Fix it) Here there's a problem since images is List<BaseNfvImage> and it does not handle "tag".
-                str.remove(items.get(i).getName());
+//            List<Image> items = dockerClient.listImagesCmd().exec();
+            for (Image image : items) {
+                images.add(Utils.getImage(image));
             }
-            log("FOR", images);
+            log("NFVImages", images);
+
+//            for(int i=0; i < items.size(); i++){
+//                System.out.println(items.get(i).getRepoTags());
+//                img.setCreated(new Date());
+//                img.setExtId(UUID.randomUUID().toString());
+//                str.add(items.get(i).getName());
+//                img.setTags(str);
+//                log("IMG", img);
+//                images.add(img); // Todo: (Fix it) Here there's a problem since images is List<BaseNfvImage> and it does not handle "tag".
+//                str.remove(items.get(i).getName());
+//            }
+//            log("FOR", images);
         } catch (IOException e) { // Exception e
             e.printStackTrace();
             logger.error(e.getMessage(), e);
@@ -127,19 +133,6 @@ public class KubernetesVIM extends VimDriver {
         return images;
     }
 
-    public List<BaseNfvImage> listImages(BaseVimInstance vimInstance, String image_name) throws VimDriverException {
-
-//        DockerClient dockerClient = DockerClientBuilder.getInstance().build(); // Creating Docker Client for listing Images available
-//
-//        List<SearchItem> items = dockerClient.searchImagesCmd("Java").exec();
-//
-//        for(int i=0; i < items.size(); i++){
-//            System.out.println(items.get(i).getName());
-//        }
-
-        return new ArrayList<>();
-    }
-
     @Override
     public List<DeploymentFlavour> listFlavors(BaseVimInstance vimInstance) throws VimDriverException {
         return null;
@@ -150,38 +143,18 @@ public class KubernetesVIM extends VimDriver {
         System.out.println("Refreshing VIM");
         log("vimInstance",vimInstance.toString());
 
-        try {
-            DockerVimInstance kubernetes = (DockerVimInstance) vimInstance;
-            List<BaseNfvImage> newImages = listImages(vimInstance);
-            if (kubernetes.getImages() == null) {
-                kubernetes.setImages(new HashSet<>());
-                log("Showing Images (Null)", kubernetes.getImages());
-            }
-//            kubernetes.removeAllImages();
-            kubernetes.addAllImages(newImages);
-            log("Showing Images (Not Null)", kubernetes.getImages());
-            return (BaseVimInstance) kubernetes;
+        DockerVimInstance kubernetes = (DockerVimInstance) vimInstance;
+        List<BaseNfvImage> newImages = new ArrayList<>();
 
+        try {
+            newImages = listImages(vimInstance);
         } catch (VimDriverException e) {
             e.printStackTrace();
             logger.error(e.getMessage(), e);
         }
+        kubernetes.addAllImages(newImages);
 
-
-//        BaseVimInstance vimInstance1 =
-//        vimInstance1.setName("kub-vim-instance");
-//        vimInstance1.setActive(true);
-//        vimInstance1.setAuthUrl("https://192.168.39.206:8443");
-//        vimInstance1.setType("kubernetes");
-//        Location location = new Location();
-//        location.setName("Berlin");
-//        location.setLatitude("52.525876");
-//        location.setLatitude("13.314400");
-//        vimInstance1.setLocation(location);
-//
-
-        return vimInstance;
-
+        return kubernetes;
     }
 
     @Override
@@ -291,7 +264,7 @@ public class KubernetesVIM extends VimDriver {
 
     public static void main(String[] args) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException, IOException, TimeoutException, InterruptedException, ApiException {
         String namespace = null;
-        String master = "https://192.168.39.60:8443";
+        String master = "https://192.168.39.131:8443";
 
         BaseVimInstance vimInstance = null;
         String vim_name = "k8-vim-instance";
@@ -324,6 +297,7 @@ public class KubernetesVIM extends VimDriver {
 
         try {
             ApiClient client = Config.defaultClient(); //Creating Kubernetes client
+//            ApiClient client = Config.from
             Configuration.setDefaultApiClient(client); //Setting Kubernetes client as Default one. Necessary for the CoreV1Api
 
             CoreV1Api api = new CoreV1Api(); //Creating obj for requesting information via API
@@ -336,13 +310,17 @@ public class KubernetesVIM extends VimDriver {
 
             V1PodList ls_pods = null;
 
-            DockerClient dockerClient = DockerClientBuilder.getInstance().build();
-
-            List<SearchItem> items = dockerClient.searchImagesCmd("").exec();
-
-            for(int i=0; i < items.size(); i++){
-                System.out.println(items.get(i).getName());
-            }
+//            String[] tags = null;
+//
+//            DockerClient dockerClient = DockerClientBuilder.getInstance().build();
+//
+//            List<Image> items = dockerClient.listImagesCmd().exec();
+//
+//            for(int i=0; i < items.size(); i++){
+//                tags = items.get(i).getRepoTags();
+//                for (int j=0; j<tags.length; j++)
+//                    System.out.println(tags[j]);
+//            }
 
 
 //            try {
