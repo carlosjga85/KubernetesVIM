@@ -2,6 +2,7 @@ package org.openbaton.drivers;
 
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.model.Image;
+import com.github.dockerjava.api.model.Network;
 import com.github.dockerjava.api.model.SearchItem;
 import com.github.dockerjava.core.DockerClientBuilder;
 import io.kubernetes.client.ApiClient;
@@ -34,6 +35,9 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public class KubernetesVIM extends VimDriver {
@@ -80,14 +84,36 @@ public class KubernetesVIM extends VimDriver {
 
     @Override
     public List<BaseNetwork> listNetworks(BaseVimInstance vimInstance) throws VimDriverException {
-        return null;
+        List<BaseNetwork> networks = new ArrayList<>();
+
+        try {
+            ApiClient client = Config.defaultClient(); //Creating Kubernetes client
+            Configuration.setDefaultApiClient(client); //Setting Kubernetes client as Default one. Necessary for the CoreV1Api
+
+            DockerClient dockerClient = DockerClientBuilder.getInstance().build(); // Creating Docker Client for listing Images available
+
+            networks.add(Utils.getNetwork());
+            log("Networks:::", networks);
+        } catch (IOException e) {
+            e.printStackTrace();
+            logger.error(e.getMessage(), e);
+
+
+            Throwable[] suppressed = e.getSuppressed();
+            if (suppressed != null) {
+                for (Throwable t : suppressed) {
+                    logger.error(t.getMessage(), t);
+                }
+            }
+        }
+        return networks;
     }
 
     @Override
     public List<BaseNfvImage> listImages(BaseVimInstance vimInstance) throws VimDriverException {
 
         List<BaseNfvImage> images = new ArrayList<>();
-        DockerImage img = new DockerImage();
+//        DockerImage img = new DockerImage();
 
         try {
             ApiClient client = Config.defaultClient(); //Creating Kubernetes client
@@ -144,15 +170,52 @@ public class KubernetesVIM extends VimDriver {
         log("vimInstance",vimInstance.toString());
 
         DockerVimInstance kubernetes = (DockerVimInstance) vimInstance;
-        List<BaseNfvImage> newImages = new ArrayList<>();
 
+        ExecutorService executor = Executors.newFixedThreadPool(3);
+
+        final Exception[] e = new Exception[3];
+
+        executor.execute(
+            () -> {
+                List<BaseNfvImage> newImages = new ArrayList<>();
+
+                try {
+                    newImages = listImages(vimInstance);
+                } catch (VimDriverException e1) {
+                    e[0] = e1;
+                    return;
+//                    e.printStackTrace();
+//                    logger.error(e.getMessage(), e);
+                }
+                kubernetes.addAllImages(newImages);
+            }
+        );
+        executor.execute(
+            () -> {
+                List<BaseNetwork> newNetwork = new ArrayList<>();
+                try {
+                    newNetwork = listNetworks(vimInstance);
+                } catch (VimDriverException e1) {
+                    e[1] = e1;
+                    return;
+                }
+                kubernetes.addAllNetworks(newNetwork);
+            }
+        );
+        executor.shutdown();
         try {
-            newImages = listImages(vimInstance);
-        } catch (VimDriverException e) {
-            e.printStackTrace();
-            logger.error(e.getMessage(), e);
+            if (!executor.awaitTermination(300, TimeUnit.SECONDS)) {
+                throw new VimDriverException(
+                        "Timeout waiting for the refresh, probably openstack will never answer...");
+            }
+        } catch (InterruptedException e1) {
+            e1.printStackTrace();
         }
-        kubernetes.addAllImages(newImages);
+        Optional<Exception> exception = Arrays.stream(e).filter(Objects::nonNull).findAny();
+        if (exception.isPresent()) {
+            throw new VimDriverException("Error refreshing vim", exception.get());
+        }
+
 
         return kubernetes;
     }

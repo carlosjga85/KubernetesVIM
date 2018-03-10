@@ -4,13 +4,13 @@ import com.github.dockerjava.api.model.Image;
 import org.openbaton.catalogue.nfvo.images.BaseNfvImage;
 import org.openbaton.catalogue.nfvo.images.DockerImage;
 import org.openbaton.catalogue.nfvo.images.NFVImage;
+import org.openbaton.catalogue.nfvo.networks.BaseNetwork;
+import org.openbaton.catalogue.nfvo.networks.DockerNetwork;
+import org.openbaton.catalogue.nfvo.networks.Network;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 class Utils {
     private static Logger log = LoggerFactory.getLogger(Utils.class);
@@ -27,6 +27,24 @@ class Utils {
         nfvImage.setCreated(new Date(image.getCreated()));
 
         return nfvImage;
+    }
+
+    static BaseNetwork getNetwork() {
+//        Network nfvNetwork = new Network();
+        DockerNetwork docnet = new DockerNetwork();
+        docnet.setExtId(UUID.randomUUID().toString());
+        docnet.setName("kubernetes-net");
+        docnet.setDriver("host");
+        docnet.setScope("local");
+        docnet.setGateway("172.17.0.1");
+        docnet.setSubnet("172.17.0.0/16");
+
+//
+//        nfvNetwork.setExtId(UUID.randomUUID().toString());
+//        nfvNetwork.setName("kubernetes-net");
+//        nfvNetwork.
+
+        return docnet;
     }
 
 }
