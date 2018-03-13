@@ -8,7 +8,11 @@ import com.github.dockerjava.core.DockerClientBuilder;
 import io.kubernetes.client.ApiClient;
 import io.kubernetes.client.ApiException;
 import io.kubernetes.client.Configuration;
+import io.kubernetes.client.apis.ApiextensionsV1beta1Api;
+import io.kubernetes.client.apis.ApisApi;
+import io.kubernetes.client.apis.AppsV1beta1Api;
 import io.kubernetes.client.apis.CoreV1Api;
+import io.kubernetes.client.auth.ApiKeyAuth;
 import io.kubernetes.client.models.*;
 import io.kubernetes.client.util.Config;
 import org.joda.time.DateTime;
@@ -31,6 +35,7 @@ import org.openbaton.vim.drivers.interfaces.VimDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.*;
@@ -123,10 +128,6 @@ public class KubernetesVIM extends VimDriver {
 
             List<Image> items = dockerClient.listImagesCmd().exec();
 
-//            Set<String> str = new HashSet<String>();
-//            Image image;
-
-//            List<Image> items = dockerClient.listImagesCmd().exec();
             for (Image image : items) {
                 images.add(Utils.getImage(image));
             }
@@ -177,28 +178,34 @@ public class KubernetesVIM extends VimDriver {
 
         executor.execute(
             () -> {
-                List<BaseNfvImage> newImages = new ArrayList<>();
+                List<BaseNfvImage> newImages; // = new ArrayList<>();
 
                 try {
                     newImages = listImages(vimInstance);
                 } catch (VimDriverException e1) {
                     e[0] = e1;
                     return;
-//                    e.printStackTrace();
-//                    logger.error(e.getMessage(), e);
                 }
+                if (kubernetes.getImages() == null) {
+                    kubernetes.setImages(new HashSet<>());
+                }
+                kubernetes.getImages().clear();
                 kubernetes.addAllImages(newImages);
             }
         );
         executor.execute(
             () -> {
-                List<BaseNetwork> newNetwork = new ArrayList<>();
+                List<BaseNetwork> newNetwork; //= new ArrayList<>();
                 try {
                     newNetwork = listNetworks(vimInstance);
                 } catch (VimDriverException e1) {
                     e[1] = e1;
                     return;
                 }
+                if (kubernetes.getNetworks() == null) {
+                    kubernetes.setNetworks(new HashSet<>());
+                }
+                kubernetes.getNetworks().clear();
                 kubernetes.addAllNetworks(newNetwork);
             }
         );
@@ -327,10 +334,12 @@ public class KubernetesVIM extends VimDriver {
 
     public static void main(String[] args) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException, IOException, TimeoutException, InterruptedException, ApiException {
         String namespace = null;
-        String master = "https://192.168.39.131:8443";
+        String master = "https://192.168.39.118:8443";
 
         BaseVimInstance vimInstance = null;
         String vim_name = "k8-vim-instance";
+        String str_caCert = "/home/carlos/.minikube/ca.crt";
+        FileInputStream caCert = new FileInputStream(str_caCert);
         String authUrl = master + "/api/v1";
         String vim_image = "nginx";
         String vim_flavor = "flavor1";
@@ -338,6 +347,7 @@ public class KubernetesVIM extends VimDriver {
         String vim_tenant = "minikube";
         String vim_user = "carlosj";
         String vim_pass = "passwd";
+        String token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJkZWZhdWx0Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZWNyZXQubmFtZSI6ImRlZmF1bHQtdG9rZW4tZDRsZHciLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC5uYW1lIjoiZGVmYXVsdCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6IjFkMDZkMWVkLTI1ZDYtMTFlOC05NzQyLTNjOGI0MTdhMDE0ZSIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDpkZWZhdWx0OmRlZmF1bHQifQ.YMHMJl3U7a2sVTO41aO9k78Hp3TG2NCKeBKk4NErE7g5IyJQygfU0sN_Tpbggn-gGb4RS0kg_250DOYOoAtutoUGHiAPoI6mCZJkNMf-uXIyAuxx0GlH8E9A0SXqzrf-iwPulVUKnJEE7pO7itz5gQYFWw0ZnGUg8Fy8Q-j1kVeAjIkQpX7wxbU2sezApM8_VcgdclAoFOD8HldAo8cDF6mxKrwswVk5JjKrqmlFSlYwd6fAJS6pwg-70woZOa6Xt2fQvAWUl_ZN-NRCR64_cARmmwCJVEuIb_8lHTQzIPb-pBWBiGpyR4hCmP69CRE460ML1vgZ5dJkwTAhAhbEfQ";
         Set<VNFDConnectionPoint> network;
         Set<String> secGroup;
         String userData;
@@ -354,7 +364,22 @@ public class KubernetesVIM extends VimDriver {
             PluginStarter.registerPlugin(KubernetesVIM.class, "kubernetes", "127.0.0.1", 5672, 10);
         }
 
+        ApiClient defaultClient = new ApiClient();
+        defaultClient.setBasePath(master);
+        defaultClient.setSslCaCert(caCert);
+        defaultClient.setApiKey("Bearer " + token);
+        log("ApiClient", defaultClient);
+//            ApiClient client = Config.from
+        Configuration.setDefaultApiClient(defaultClient); //Setting Kubernetes client as Default one. Necessary for the CoreV1Api
 
+        ApisApi apiInstance = new ApisApi();
+        try {
+            V1APIGroupList result = apiInstance.getAPIVersions();
+            System.out.println(result);
+        } catch (ApiException e) {
+            System.err.println("Exception when calling ApisApi#getAPIVersions");
+            e.printStackTrace();
+        }
 
 
 
@@ -363,7 +388,84 @@ public class KubernetesVIM extends VimDriver {
 //            ApiClient client = Config.from
             Configuration.setDefaultApiClient(client); //Setting Kubernetes client as Default one. Necessary for the CoreV1Api
 
+
+
             CoreV1Api api = new CoreV1Api(); //Creating obj for requesting information via API
+
+//            AppsV1beta1Api apiInstance = new AppsV1beta1Api();
+//
+//
+//            //Creating deployment
+//            AppsV1beta1Deployment deploy = new AppsV1beta1Deployment();
+//            deploy.setApiVersion("apps/v1beta1");
+//            deploy.setKind("Deployment");
+//                V1ObjectMeta meta = new V1ObjectMeta();
+//                    meta.setName("iperf-client");
+//                    Map<String, String> label1 = new HashMap<>();
+//                    label1.put("app", "iperf-client");
+//                    meta.setLabels(label1);
+//    //            meta.setClusterName("minikube");
+//    //            meta.setNamespace("default");
+//            deploy.setMetadata(meta);
+//                AppsV1beta1DeploymentSpec spec = new AppsV1beta1DeploymentSpec();
+//                    spec.setReplicas(1);
+//                        V1LabelSelector selector = new V1LabelSelector();
+//                            selector.setMatchLabels(label1);
+//                    spec.setSelector(selector);
+//    //                V1PodTemplate template = new V1PodTemplate();
+//                        V1PodTemplateSpec temp_spec = new V1PodTemplateSpec();
+//                            V1ObjectMeta temp_meta = new V1ObjectMeta();
+//                                temp_meta.setLabels(label1);
+//                            temp_spec.setMetadata(temp_meta);
+//                            V1PodSpec pod_spec = new V1PodSpec();
+//                                List<V1Container> containers = new ArrayList<>();
+//                                    V1Container container = new V1Container();
+//                                        container.setName("iperf-client");
+//                                        container.setImagePullPolicy("Never");
+//                                        container.setImage("iperfclient:latest");
+//                                        List<V1ContainerPort> ports = new ArrayList<>();
+//                                            V1ContainerPort port = new V1ContainerPort();
+//                                            port.setContainerPort(80);
+//                                            ports.add(port);
+//                                        container.setPorts(ports);
+//                                    containers.add(container);
+//                                pod_spec.containers(containers);
+//                            temp_spec.setSpec(pod_spec);
+//                    spec.setTemplate(temp_spec);
+//            deploy.setSpec(spec);
+
+
+
+
+//                    V1ObjectMeta temp_meta = new V1ObjectMeta();
+//                        temp_meta.setLabels(label1);
+//                    V1PodTemplateSpec temp_spec = new V1PodTemplateSpec();
+//                    List<V1Container> containers = new ArrayList<>();
+//                    V1Container container = new V1Container();
+//                        container.setName("iperf-client");
+//                        container.setImagePullPolicy("Never");
+//                        container.setImage("iperfclient:latest");
+//                        List<V1ContainerPort> ports = new ArrayList<>();
+//                            V1ContainerPort port = new V1ContainerPort();
+//                            port.setContainerPort(80);
+//                            ports.add(port);
+//                            container.setPorts(ports);
+//                        containers.add(container);
+//                        V1PodSpec pod_spec = new V1PodSpec();
+//                        pod_spec.containers(containers);
+//                    temp_spec.setSpec(pod_spec);
+//                template.setMetadata(temp_meta);
+//                template.setTemplate(temp_spec);
+//                spec.setTemplate(temp_spec);
+
+//            try {
+//                AppsV1beta1Deployment result = apiInstance.createNamespacedDeployment("default", deploy, "pretty");
+//                System.out.println("Result Deployment: " + result);
+//            } catch (ApiException e) {
+//                System.err.println("Exception when calling AppsV1beta1Api#createNamespacedDeployment");
+//                e.printStackTrace();
+//            }
+
 //            List<V1Pod> ls_pods = new ArrayList<>();
 //            List<NFVImage> images = new ArrayList<>();
 
@@ -371,7 +473,7 @@ public class KubernetesVIM extends VimDriver {
 //            KubernetesVimInstance kubernetes = (KubernetesVimInstance) vimInstance;
 //            List<BaseNfvImage> newImages = listImages(vimInstance);
 
-            V1PodList ls_pods = null;
+//            V1PodList ls_pods = null;
 
 //            String[] tags = null;
 //
